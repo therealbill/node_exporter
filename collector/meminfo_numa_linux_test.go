@@ -57,3 +57,43 @@ func TestMemInfoNuma(t *testing.T) {
 		t.Errorf("want memory FilePages %f, got %f", want, got)
 	}
 }
+
+func TestMemInfoNumaStat(t *testing.T) {
+	file, err := os.Open("fixtures/sys/devices/system/node/node0/numastat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	numaStat, err := parseMemInfoNumaStat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := 193460335812.0, numaStat["numa_hit"]; want != got {
+		t.Errorf("want numa stat numa_hit %f, got %f", want, got)
+	}
+
+	if want, got := 193454780853.0, numaStat["local_node"]; want != got {
+		t.Errorf("want numa stat local_node %f, got %f", want, got)
+	}
+
+	file, err = os.Open("fixtures/sys/devices/system/node/node1/numastat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	numaStat, err = parseMemInfoNumaStat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := 59858626709.0, numaStat["numa_miss"]; want != got {
+		t.Errorf("want numa stat numa_miss %f, got %f", want, got)
+	}
+
+	if want, got := 59860526920.0, numaStat["other_node"]; want != got {
+		t.Errorf("want numa stat other_node %f, got %f", want, got)
+	}
+}

@@ -33,6 +33,8 @@ const (
 	memInfoNumaSubsystem = "memory_numa"
 )
 
+var nodeRE = regexp.MustCompile(`.*devices/system/node/node([0-9]*)`)
+
 type meminfoKey struct {
 	metricName, numaNode string
 }
@@ -93,6 +95,21 @@ func getMemInfoNuma() (map[meminfoKey]float64, error) {
 		for k, v := range numaInfo {
 			info[k] = v
 		}
+
+		file, err := os.Open(path.Join(node, "numastat"))
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+
+		nodeNumber := nodeRE.FindStringSubmatch(node)[0]
+		numaStat, err := parseMemInfoNumaStat(file)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range numaStat {
+			info[meminfoKey{k, nodeNumber}] = v
+		}
 	}
 
 	return info, nil
@@ -131,4 +148,30 @@ func parseMemInfoNuma(r io.Reader) (map[meminfoKey]float64, error) {
 	}
 
 	return memInfo, nil
+}
+
+func parseMemInfoNumaStat(r io.Reader) (map[string]float64, error) {
+  var (
+    numaStat = map[string]float64{}
+    scanner  = bufio.NewScanner(r)
+    re       = regexp.MustCompile("\\((.*)\\)")
+  )
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(string(line))
+
+		fv, err := strconv.ParseFloat(parts[1], 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value in meminfo: %s", err)
+		}
+
+		// Active(anon) -> Active_anon
+		metric := re.ReplaceAllString(parts[0], "_stat_${1}")
+		numaStat[parts[0]] = fv
+	}
+	return numaStat, nil
 }
